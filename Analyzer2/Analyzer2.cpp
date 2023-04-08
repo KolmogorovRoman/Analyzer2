@@ -203,31 +203,48 @@ struct StackMachineState: std::enable_shared_from_this<StackMachineState>
 	}
 };
 
-std::list<std::shared_ptr<StackMachineState>> expand(std::list<std::shared_ptr<StackMachineState>> leafs, const std::list<const Rule*>& expandingRules)
+std::list<std::shared_ptr<StackMachineState>> expand(std::list<std::shared_ptr<StackMachineState>> leafs, std::multimap<const Symbol*, const Rule*> expandingRules)
 {
 	while (true)
 	{
-		std::list<std::shared_ptr<StackMachineState>> newLeafs;
+		std::shared_ptr<StackMachineState> leaf = leafs.front();
 		bool leafAdvanced = false;
-		for (const std::shared_ptr<StackMachineState>& l : leafs)
+		auto rules_range = expandingRules.equal_range(*leaf->next_parent);
+		for (std::multimap<const Symbol*, const Rule*>::const_iterator rule = rules_range.first; rule!= rules_range.second;	rule++)
 		{
-			const Symbol* leafStackTop = *l->next_parent;
-			if (!leafStackTop->isTerminal)
+			if (!leaf->next_parent->isTerminal && leaf->ruleApplicable(rule->second))
 			{
-				for (const Rule* r : expandingRules)
-				{
-					if (l->ruleApplicable(r))
-					{
-						leafAdvanced = true;
-						newLeafs.push_back(l->advanced(r));
-					}
-				}
+				leafs.push_back(leaf->advanced(rule->second));
+				leafAdvanced = true;
 			}
 		}
 		if (!leafAdvanced) break;
-		leafs = newLeafs;
+		leafs.pop_front();
 	}
 	return leafs;
+	//while (true)
+	//{
+	//	std::list<std::shared_ptr<StackMachineState>> newLeafs;
+	//	bool leafAdvanced = false;
+	//	for (const std::shared_ptr<StackMachineState>& l : leafs)
+	//	{
+	//		const Symbol* leafStackTop = *l->next_parent;
+	//		if (!leafStackTop->isTerminal)
+	//		{
+	//			for (const Rule* r : expandingRules)
+	//			{
+	//				if (l->ruleApplicable(r))
+	//				{
+	//					leafAdvanced = true;
+	//					newLeafs.push_back(l->advanced(r));
+	//				}
+	//			}
+	//		}
+	//	}
+	//	if (!leafAdvanced) break;
+	//	leafs = newLeafs;
+	//}
+	//return leafs;
 }
 
 int main()
@@ -267,12 +284,12 @@ int main()
 	Symbol* C = new Symbol(false, "C");
 
 	const Rule* start_rule = Rule::makeStart(A);
-	std::list<const Rule*> expandingRules
+	std::multimap<const Symbol*, const Rule*> expandingRules
 	{
-		new Rule(A, { B, C }),
-		new Rule(B, { b }),
-		new Rule(B, { b, B }),
-		new Rule(C, { c })
+		{A, new Rule(A, { B, C })},
+		{B, new Rule(B, { })},
+		{B, new Rule(B, { b, B })},
+		{C, new Rule(C, { c })}
 	};
 	std::map<const Symbol*, Rule*> checkingRules;
 	checkingRules[b] = Rule::makeChecking(b);
