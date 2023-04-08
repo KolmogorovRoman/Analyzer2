@@ -203,122 +203,130 @@ struct StackMachineState: std::enable_shared_from_this<StackMachineState>
 	}
 };
 
-std::list<std::shared_ptr<StackMachineState>> expand(std::list<std::shared_ptr<StackMachineState>> leafs, std::multimap<const Symbol*, const Rule*> expandingRules)
+class Analyzer
 {
-	while (true)
+	std::map<std::string, const Symbol*> symbolbyName;
+
+	const Rule* start_rule;
+	std::map<const Symbol*, std::list<const Rule*>> expandingRules;
+	std::map<const Symbol*, Rule*> checkingRules;
+	std::list<std::shared_ptr<StackMachineState>> expand(const std::shared_ptr<StackMachineState>& leaf)
 	{
-		std::shared_ptr<StackMachineState> leaf = leafs.front();
-		bool leafAdvanced = false;
-		auto rules_range = expandingRules.equal_range(*leaf->next_parent);
-		for (std::multimap<const Symbol*, const Rule*>::const_iterator rule = rules_range.first; rule!= rules_range.second;	rule++)
+		/*for (std::list<std::shared_ptr<StackMachineState>>::const_iterator leaf = std::begin(leafs); leaf != std::end(leafs); leaf++)
 		{
-			if (!leaf->next_parent->isTerminal && leaf->ruleApplicable(rule->second))
+
+		}*/
+
+		std::list<std::shared_ptr<StackMachineState>> leafs({ leaf });
+		while (true)
+		{
+			std::shared_ptr<StackMachineState> leaf = leafs.front();
+			bool leafAdvanced = false;
+			for (const Rule* rule : expandingRules[*leaf->next_parent])
 			{
-				leafs.push_back(leaf->advanced(rule->second));
-				leafAdvanced = true;
+				if (!leaf->next_parent->isTerminal && leaf->ruleApplicable(rule))
+				{
+					leafs.push_back(leaf->advanced(rule));
+					leafAdvanced = true;
+				}
 			}
+			if (!leafAdvanced) break;
+			leafs.pop_front();
 		}
-		if (!leafAdvanced) break;
-		leafs.pop_front();
+		return leafs;
 	}
-	return leafs;
-	//while (true)
-	//{
-	//	std::list<std::shared_ptr<StackMachineState>> newLeafs;
-	//	bool leafAdvanced = false;
-	//	for (const std::shared_ptr<StackMachineState>& l : leafs)
-	//	{
-	//		const Symbol* leafStackTop = *l->next_parent;
-	//		if (!leafStackTop->isTerminal)
-	//		{
-	//			for (const Rule* r : expandingRules)
-	//			{
-	//				if (l->ruleApplicable(r))
-	//				{
-	//					leafAdvanced = true;
-	//					newLeafs.push_back(l->advanced(r));
-	//				}
-	//			}
-	//		}
-	//	}
-	//	if (!leafAdvanced) break;
-	//	leafs = newLeafs;
-	//}
-	//return leafs;
-}
+public:
+	Analyzer(std::list<const Symbol*> symbols, const Symbol* start, std::list<const Rule*> rules)
+	{
+		for (const Symbol* symbol : symbols)
+		{
+			if (symbol->isTerminal)
+				checkingRules[symbol] = Rule::makeChecking(symbol);
+		}
+		start_rule = Rule::makeStart(start);
+		for (const Rule* rule : rules)
+		{
+			expandingRules[rule->left].push_back(rule);
+		}
+	}
+	Analyzer(const std::list<std::string>& terminals,
+			 const std::list<std::string>& nonterminals,
+			 const std::string& start,
+			 const std::list<std::list<std::string>>& rules)
+	{
+		for (const std::string& terminal : terminals)
+		{
+			symbolbyName[terminal] = new Symbol(true, terminal);
+			checkingRules[symbolbyName[terminal]] = Rule::makeChecking(symbolbyName[terminal]);
+		}
+		for (const std::string& nonterminal : nonterminals)
+		{
+			symbolbyName[nonterminal] = new Symbol(false, nonterminal);
+		}
+		start_rule = Rule::makeStart(symbolbyName[start]);
+		for (std::list<std::string> rule : rules)
+		{
+			const Symbol* left = symbolbyName[rule.front()];
+			rule.pop_front();
+			std::vector<const Symbol*> right;
+			for (const std::string& r : rule)
+				right.push_back(symbolbyName[r]);
+			expandingRules[left].push_back(new Rule(left, right));
+		}
+	}
+	std::unique_ptr<TreeNode> analyze(std::list<const Symbol*> input)
+	{
+		std::list<std::shared_ptr<StackMachineState>> leafs = { std::make_shared<StackMachineState>(start_rule) };
+		for (const Symbol* i : input)
+		{
+			std::list<std::shared_ptr<StackMachineState>> expandedLeafs;
+			for (const std::shared_ptr<StackMachineState>& leaf : leafs)
+			{
+				std::list<std::shared_ptr<StackMachineState>> leafs_to_add = expand(leaf);
+				expandedLeafs.insert(std::end(expandedLeafs), std::begin(leafs_to_add), std::end(leafs_to_add));
+			}
+			leafs = expandedLeafs;
+			std::list<std::shared_ptr<StackMachineState>> newLeafs;
+			for (const std::shared_ptr<StackMachineState>& l : leafs)
+			{
+				const Symbol* leafStackTop = *l->next_parent;
+				if (!leafStackTop->isTerminal)
+				{
+					throw "There must be terminals only";
+				}
+				if (leafStackTop == i)
+				{
+					Rule* c = checkingRules[leafStackTop];
+					newLeafs.push_back(l->advanced(c));
+				}
+			}
+			leafs = newLeafs;
+		}
+		std::unique_ptr<TreeNode> root = leafs.back()->getTree();
+		return std::move(root);
+	}
+	std::unique_ptr<TreeNode> analyze(std::list<std::string> text_input)
+	{
+		std::list<const Symbol*> input;
+		for (const std::string& i : text_input)
+			input.push_back(symbolbyName[i]);
+		return analyze(input);
+	}
+};
 
 int main()
 {
-	/*Symbol* variable = new Symbol(true, "variable");
-	Symbol* oper = new Symbol(true, "oper");
-	Symbol* expression = new Symbol(false, "expression");
-
-	std::vector<Symbol*> symbols{ variable, oper, expression };
-
-	std::vector<Rule> rules;
-	rules.push_back(Rule(expression, std::vector<Symbol*>{variable}));
-	rules.push_back(Rule(expression, std::vector<Symbol*>{expression, oper, variable}));
-
-	std::vector<Rule> rules;
-	for (const Rule& r : rules)
-	{
-		Symbol* left = r.left;
-		std::vector<Symbol*> right = r.right;
-		rules.push_back(Rule(left, right));
-	}
-	for (Symbol* s : symbols)
-	{
-		Symbol* input = s;
-		Symbol* left = s;
-		std::vector<Symbol*> right = {};
-		rules.push_back(Rule(input, left, right));
-	}
-
-	StackMachineState s(nullptr, nullptr, );
-	std::cout << "Hello World!\n";*/
-	Symbol* a = new Symbol(true, "a");
-	Symbol* b = new Symbol(true, "b");
-	Symbol* c = new Symbol(true, "c");
-	Symbol* A = new Symbol(false, "A");
-	Symbol* B = new Symbol(false, "B");
-	Symbol* C = new Symbol(false, "C");
-
-	const Rule* start_rule = Rule::makeStart(A);
-	std::multimap<const Symbol*, const Rule*> expandingRules
-	{
-		{A, new Rule(A, { B, C })},
-		{B, new Rule(B, { })},
-		{B, new Rule(B, { b, B })},
-		{C, new Rule(C, { c })}
-	};
-	std::map<const Symbol*, Rule*> checkingRules;
-	checkingRules[b] = Rule::makeChecking(b);
-	checkingRules[c] = Rule::makeChecking(c);
-
-	std::list<const Symbol*> input{ b, b, c };
-
-	std::shared_ptr<StackMachineState> start = std::make_shared<StackMachineState>(start_rule);
-	std::list<std::shared_ptr<StackMachineState>> leafs = { start };
-	for (const Symbol* i : input)
-	{
-		leafs = expand(leafs, expandingRules);
-		std::list<std::shared_ptr<StackMachineState>> newLeafs;
-		for (const std::shared_ptr<StackMachineState>& l : leafs)
+	Analyzer analyzer(
+		{ "a", "b", "c" },
+		{ "A", "B", "C" },
+		"A",
 		{
-			const Symbol* leafStackTop = *l->next_parent;
-			if (!leafStackTop->isTerminal)
-			{
-				throw "There must be terminals only";
-			}
-			if (leafStackTop == i)
-			{
-				Rule* c = checkingRules[leafStackTop];
-				newLeafs.push_back(l->advanced(c));
-			}
+			{"A", "B", "C"},
+			{"B"},
+			{"B", "b", "B"},
+			{"C", "c"},
 		}
-		leafs = newLeafs;
-	}
-	//std::cout << std::endl;
-	std::unique_ptr<TreeNode> root = leafs.back()->getTree();
+	);
+	std::unique_ptr<TreeNode> root = analyzer.analyze({ "b", "b", "c" });
 	root->out(0);
 }
