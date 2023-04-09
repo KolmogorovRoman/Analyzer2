@@ -289,14 +289,13 @@ public:
 			std::list<std::shared_ptr<StackMachineState>> newLeafs;
 			for (const std::shared_ptr<StackMachineState>& l : leafs)
 			{
-				const Symbol* leafStackTop = *l->next_parent;
-				if (!leafStackTop->isTerminal)
+				if (!l->next_parent->isTerminal)
 				{
 					throw "There must be terminals only";
 				}
-				if (leafStackTop == i)
+				if (*l->next_parent == i)
 				{
-					Rule* c = checkingRules[leafStackTop];
+					Rule* c = checkingRules[*l->next_parent];
 					newLeafs.push_back(l->advanced(c));
 				}
 			}
@@ -317,16 +316,27 @@ public:
 int main()
 {
 	Analyzer analyzer(
-		{ "a", "b", "c" },
-		{ "A", "B", "C" },
+		{ "a", "b", },
+		{ "A", "B", },
 		"A",
 		{
-			{"A", "B", "C"},
+			{"A", "a", "B"},
 			{"B"},
-			{"B", "b", "B"},
-			{"C", "c"},
+			{"A"},
+			{"B", "b", "A"},
 		}
 	);
-	std::unique_ptr<TreeNode> root = analyzer.analyze({ "b", "b", "c" });
+	//Analyzer analyzer(
+	//	{ "a", "b", "c" },
+	//	{ "A", "B", "C" },
+	//	"A",
+	//	{
+	//		{"A", "B", "C"},
+	//		{"B"},
+	//		{"B", "b", "B"},
+	//		{"C", "c"},
+	//	}
+	//);
+	std::unique_ptr<TreeNode> root = analyzer.analyze({ "a", "b", "a" });
 	root->out(0);
 }
