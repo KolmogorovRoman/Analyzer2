@@ -123,19 +123,6 @@ struct StackMachineState: std::enable_shared_from_this<StackMachineState>
 		{
 			return *iterator;
 		}
-		//SymbolPointer advanced() const
-		//{
-		//	const StackMachineState* state = this->state;
-		//	//std::vector<const Symbol*>::const_iterator iterator = std::begin(state->rule->right);
-		//	std::vector<const Symbol*>::const_iterator iterator = this->iterator;
-		//	while (iterator == std::end(state->rule->right))
-		//	{
-		//		if (state == nullptr) throw "Stack is empty";
-		//		iterator = std::next(state->parent.iterator);
-		//		state = state->parent.state;
-		//	}
-		//	return SymbolPointer(state, iterator);
-		//}
 	};
 
 	const Rule* rule;
@@ -212,13 +199,28 @@ class Analyzer
 	std::map<const Symbol*, Rule*> checkingRules;
 	std::list<std::shared_ptr<StackMachineState>> expand(const std::shared_ptr<StackMachineState>& leaf)
 	{
-		/*for (std::list<std::shared_ptr<StackMachineState>>::const_iterator leaf = std::begin(leafs); leaf != std::end(leafs); leaf++)
-		{
-
-		}*/
-
 		std::list<std::shared_ptr<StackMachineState>> leafs({ leaf });
-		while (true)
+		std::list<std::shared_ptr<StackMachineState>>::iterator state = std::start(leafs);
+		while (state!=std::end(leafs))
+		{
+			std::shared_ptr<StackMachineState> leaf = *state;
+			if (leaf->next_parent->isTerminal)
+				state++;
+			else
+			{
+				std::list<std::shared_ptr<StackMachineState>> leafs_to_insert;
+				for (const Rule* rule : expandingRules[*leaf->next_parent])
+					if (leaf->ruleApplicable(rule))
+					{
+						leafs_to_insert.push_back(leaf->advanced(rule));
+						//leafs.insert(state, leaf->advanced(rule));
+					}
+				state = leafs.erace(state);
+				state = leafs.insert(state, std::begin(leafs_to_insert), std::end(leafs_to_insert));
+			}
+		}
+		return leafs;
+		/*while (true)
 		{
 			std::shared_ptr<StackMachineState> leaf = leafs.front();
 			bool leafAdvanced = false;
@@ -232,8 +234,7 @@ class Analyzer
 			}
 			if (!leafAdvanced) break;
 			leafs.pop_front();
-		}
-		return leafs;
+		}*/
 	}
 public:
 	Analyzer(std::list<const Symbol*> symbols, const Symbol* start, std::list<const Rule*> rules)
