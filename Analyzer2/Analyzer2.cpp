@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <ranges>
 
 using namespace std::string_literals;
 
@@ -57,9 +58,9 @@ struct Rule
 	{
 		view = "["s + terminal->name + "]"s;
 	}*/
-	static Rule* makeStart(const Symbol* start)
+	static Rule* makeStart(const Symbol* start, const Symbol* end)
 	{
-		return new Rule(nullptr, { start, nullptr }, start->name);
+		return new Rule(nullptr, { start, end, nullptr }, start->name);
 	}
 	//static Rule* makeStart(const std::vector<const Symbol*>& start)
 	//{
@@ -195,46 +196,28 @@ class Analyzer
 	std::map<std::string, const Symbol*> symbolbyName;
 
 	const Rule* start_rule;
+	const Symbol* end_symbol;
 	std::map<const Symbol*, std::list<const Rule*>> expandingRules;
 	std::map<const Symbol*, Rule*> checkingRules;
 	std::list<std::shared_ptr<StackMachineState>> expand(const std::shared_ptr<StackMachineState>& leaf)
 	{
 		std::list<std::shared_ptr<StackMachineState>> leafs({ leaf });
-		std::list<std::shared_ptr<StackMachineState>>::iterator state = std::start(leafs);
-		while (state!=std::end(leafs))
+		std::list<std::shared_ptr<StackMachineState>>::iterator state = std::begin(leafs);
+		while (state != std::end(leafs))
 		{
 			std::shared_ptr<StackMachineState> leaf = *state;
 			if (leaf->next_parent->isTerminal)
 				state++;
 			else
 			{
-				std::list<std::shared_ptr<StackMachineState>> leafs_to_insert;
-				for (const Rule* rule : expandingRules[*leaf->next_parent])
-					if (leaf->ruleApplicable(rule))
-					{
-						leafs_to_insert.push_back(leaf->advanced(rule));
-						//leafs.insert(state, leaf->advanced(rule));
-					}
-				state = leafs.erace(state);
-				state = leafs.insert(state, std::begin(leafs_to_insert), std::end(leafs_to_insert));
+				std::ranges::view auto leafs_to_insert =
+					std::views::transform(expandingRules[*leaf->next_parent],
+										  [&](const Rule* rule) { return leaf->advanced(rule); });
+				state = leafs.erase(state);
+				state = leafs.insert(state, leafs_to_insert.begin(), leafs_to_insert.end());
 			}
 		}
 		return leafs;
-		/*while (true)
-		{
-			std::shared_ptr<StackMachineState> leaf = leafs.front();
-			bool leafAdvanced = false;
-			for (const Rule* rule : expandingRules[*leaf->next_parent])
-			{
-				if (!leaf->next_parent->isTerminal && leaf->ruleApplicable(rule))
-				{
-					leafs.push_back(leaf->advanced(rule));
-					leafAdvanced = true;
-				}
-			}
-			if (!leafAdvanced) break;
-			leafs.pop_front();
-		}*/
 	}
 public:
 	Analyzer(std::list<const Symbol*> symbols, const Symbol* start, std::list<const Rule*> rules)
@@ -244,7 +227,9 @@ public:
 			if (symbol->isTerminal)
 				checkingRules[symbol] = Rule::makeChecking(symbol);
 		}
-		start_rule = Rule::makeStart(start);
+		end_symbol = new Symbol(true, "eof");
+		checkingRules[end_symbol] = Rule::makeChecking(end_symbol);
+		start_rule = Rule::makeStart(start, end_symbol);
 		for (const Rule* rule : rules)
 		{
 			expandingRules[rule->left].push_back(rule);
@@ -264,7 +249,10 @@ public:
 		{
 			symbolbyName[nonterminal] = new Symbol(false, nonterminal);
 		}
-		start_rule = Rule::makeStart(symbolbyName[start]);
+		end_symbol = new Symbol(true, "eof");
+		symbolbyName["eof"s] = end_symbol;
+		checkingRules[end_symbol] = Rule::makeChecking(end_symbol);
+		start_rule = Rule::makeStart(symbolbyName[start], end_symbol);
 		for (std::list<std::string> rule : rules)
 		{
 			const Symbol* left = symbolbyName[rule.front()];
@@ -277,6 +265,7 @@ public:
 	}
 	std::unique_ptr<TreeNode> analyze(std::list<const Symbol*> input)
 	{
+		input.push_back(end_symbol);
 		std::list<std::shared_ptr<StackMachineState>> leafs = { std::make_shared<StackMachineState>(start_rule) };
 		for (const Symbol* i : input)
 		{
@@ -316,7 +305,7 @@ public:
 
 int main()
 {
-	Analyzer analyzer(
+	std::unique_ptr<TreeNode> root = Analyzer(
 		{ "a", "b", },
 		{ "A", "B", },
 		"A",
@@ -326,18 +315,18 @@ int main()
 			{"A"},
 			{"B", "b", "A"},
 		}
-	);
-	//Analyzer analyzer(
-	//	{ "a", "b", "c" },
-	//	{ "A", "B", "C" },
-	//	"A",
-	//	{
-	//		{"A", "B", "C"},
-	//		{"B"},
-	//		{"B", "b", "B"},
-	//		{"C", "c"},
-	//	}
-	//);
-	std::unique_ptr<TreeNode> root = analyzer.analyze({ "a", "b", "a" });
+	).analyze({ "a", "b", "a" });
+	root->out(0);
+	root = Analyzer(
+		{ "a", "b", "c" },
+		{ "A", "B", "C" },
+		"A",
+		{
+			{"A", "B", "C"},
+			{"B"},
+			{"B", "b", "B"},
+			{"C", "c"},
+		}
+	).analyze({ "b", "b", "c" });
 	root->out(0);
 }

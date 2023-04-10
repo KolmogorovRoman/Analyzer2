@@ -3,4 +3,7 @@
   <Type Name="Rule">
     <DisplayString>{view}</DisplayString>
   </Type>
+  <Type Name="StackMachineState::SymbolPointer">
+    <DisplayString>{iterator}</DisplayString>
+  </Type>
 </AutoVisualizer>
