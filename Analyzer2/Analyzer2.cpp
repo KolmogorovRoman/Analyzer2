@@ -99,13 +99,13 @@ struct TreeNode
 	}
 };
 
-struct StackMachineState: std::enable_shared_from_this<StackMachineState>
+struct State: std::enable_shared_from_this<State>
 {
 	struct SymbolPointer
 	{
-		const StackMachineState* state;
+		const State* state;
 		std::vector<const Symbol*>::const_iterator iterator;
-		SymbolPointer(const StackMachineState* state, std::vector<const Symbol*>::const_iterator iterator):
+		SymbolPointer(const State* state, std::vector<const Symbol*>::const_iterator iterator):
 			state(state),
 			iterator(iterator)
 		{}
@@ -127,11 +127,11 @@ struct StackMachineState: std::enable_shared_from_this<StackMachineState>
 	};
 
 	const Rule* rule;
-	const std::shared_ptr<const StackMachineState> prev;
+	const std::shared_ptr<const State> prev;
 	SymbolPointer parent;
 	SymbolPointer next_parent;
 
-	StackMachineState(const Rule* rule, std::shared_ptr<const StackMachineState> prev, SymbolPointer parent):
+	State(const Rule* rule, std::shared_ptr<const State> prev, SymbolPointer parent):
 		rule(rule),
 		prev(prev),
 		parent(parent),
@@ -143,16 +143,16 @@ struct StackMachineState: std::enable_shared_from_this<StackMachineState>
 			next_parent = SymbolPointer(next_parent.state->parent.state, std::next(next_parent.state->parent.iterator));
 		}
 	}
-	StackMachineState(const Rule* start_rule):
+	State(const Rule* start_rule):
 		rule(start_rule),
 		prev(nullptr),
 		parent(nullptr),
 		next_parent(this, std::begin(start_rule->right))
 	{}
-	std::shared_ptr<StackMachineState> advanced(const Rule* rule) const
+	std::shared_ptr<State> advanced(const Rule* rule) const
 	{
-		if (rule->left != next_parent.getSymbol()) throw "Invalid source stack";
-		return std::make_shared<StackMachineState>(rule, shared_from_this(), next_parent);
+		if (rule->left != *next_parent) throw "Invalid source stack";
+		return std::make_shared<State>(rule, shared_from_this(), next_parent);
 	}
 	bool ruleApplicable(const Rule* rule) const
 	{
@@ -160,19 +160,19 @@ struct StackMachineState: std::enable_shared_from_this<StackMachineState>
 	}
 	std::unique_ptr<TreeNode> getTree() const
 	{
-		std::list<const StackMachineState*> statesList;
-		const StackMachineState* state = this;
+		std::list<const State*> statesList;
+		const State* state = this;
 		while (state != nullptr)
 		{
 			statesList.push_front(state);
 			state = state->prev.get();
 		}
 
-		const StackMachineState* parent = nullptr;
+		const State* parent = nullptr;
 		//statesList.pop_front();
 		std::unique_ptr<TreeNode> overRoot = std::make_unique<TreeNode>();
 		TreeNode* parentNode = overRoot.get();
-		for (const StackMachineState* state : statesList)
+		for (const State* state : statesList)
 		{
 			while (state->parent.state != parent)
 			{
@@ -199,13 +199,13 @@ class Analyzer
 	const Symbol* end_symbol;
 	std::map<const Symbol*, std::list<const Rule*>> expandingRules;
 	std::map<const Symbol*, Rule*> checkingRules;
-	std::list<std::shared_ptr<StackMachineState>> expand(const std::shared_ptr<StackMachineState>& leaf)
+	std::list<std::shared_ptr<State>> expand(const std::shared_ptr<State>& leaf)
 	{
-		std::list<std::shared_ptr<StackMachineState>> leafs({ leaf });
-		std::list<std::shared_ptr<StackMachineState>>::iterator state = std::begin(leafs);
+		std::list<std::shared_ptr<State>> leafs({ leaf });
+		std::list<std::shared_ptr<State>>::iterator state = std::begin(leafs);
 		while (state != std::end(leafs))
 		{
-			std::shared_ptr<StackMachineState> leaf = *state;
+			std::shared_ptr<State> leaf = *state;
 			if (leaf->next_parent->isTerminal)
 				state++;
 			else
@@ -266,33 +266,14 @@ public:
 	std::unique_ptr<TreeNode> analyze(std::list<const Symbol*> input)
 	{
 		input.push_back(end_symbol);
-		std::list<std::shared_ptr<StackMachineState>> leafs = { std::make_shared<StackMachineState>(start_rule) };
+		std::list<std::shared_ptr<State>> leafs = { std::make_shared<State>(start_rule) };
 		for (const Symbol* i : input)
-		{
-			std::list<std::shared_ptr<StackMachineState>> expandedLeafs;
-			for (const std::shared_ptr<StackMachineState>& leaf : leafs)
-			{
-				std::list<std::shared_ptr<StackMachineState>> leafs_to_add = expand(leaf);
-				expandedLeafs.insert(std::end(expandedLeafs), std::begin(leafs_to_add), std::end(leafs_to_add));
-			}
-			leafs = expandedLeafs;
-			std::list<std::shared_ptr<StackMachineState>> newLeafs;
-			for (const std::shared_ptr<StackMachineState>& l : leafs)
-			{
-				if (!l->next_parent->isTerminal)
-				{
-					throw "There must be terminals only";
-				}
-				if (*l->next_parent == i)
-				{
-					Rule* c = checkingRules[*l->next_parent];
-					newLeafs.push_back(l->advanced(c));
-				}
-			}
-			leafs = newLeafs;
-		}
-		std::unique_ptr<TreeNode> root = leafs.back()->getTree();
-		return std::move(root);
+			for (std::list<std::shared_ptr<State>>::iterator leaf = std::begin(leafs); leaf != std::end(leafs); leaf = leafs.erase(leaf))
+				for (const std::shared_ptr<State>& expanded_leaf : expand(*leaf))
+					if (expanded_leaf->ruleApplicable(checkingRules[i]))
+						leafs.insert(leaf, expanded_leaf->advanced(checkingRules[*expanded_leaf->next_parent]));
+
+		return leafs.back()->getTree();
 	}
 	std::unique_ptr<TreeNode> analyze(std::list<std::string> text_input)
 	{
