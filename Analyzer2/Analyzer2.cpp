@@ -7,6 +7,7 @@
 #include <string>
 #include <map>
 #include <ranges>
+#include <set>
 
 using namespace std::string_literals;
 
@@ -129,34 +130,34 @@ struct State: std::enable_shared_from_this<State>
 	const Rule* rule;
 	const std::shared_ptr<const State> prev;
 	SymbolPointer parent;
-	SymbolPointer next_parent;
+	SymbolPointer frontSymbol;
 
 	State(const Rule* rule, std::shared_ptr<const State> prev, SymbolPointer parent):
 		rule(rule),
 		prev(prev),
 		parent(parent),
-		next_parent(this, std::begin(rule->right))
+		frontSymbol(this, std::begin(rule->right))
 	{
-		while (next_parent.iterator == std::end(next_parent.state->rule->right))
+		while (frontSymbol.iterator == std::end(frontSymbol.state->rule->right))
 		{
-			if (next_parent.state == nullptr) throw "Stack is empty";
-			next_parent = SymbolPointer(next_parent.state->parent.state, std::next(next_parent.state->parent.iterator));
+			if (frontSymbol.state == nullptr) throw "Stack is empty";
+			frontSymbol = SymbolPointer(frontSymbol.state->parent.state, std::next(frontSymbol.state->parent.iterator));
 		}
 	}
 	State(const Rule* start_rule):
 		rule(start_rule),
 		prev(nullptr),
 		parent(nullptr),
-		next_parent(this, std::begin(start_rule->right))
+		frontSymbol(this, std::begin(start_rule->right))
 	{}
 	std::shared_ptr<State> advanced(const Rule* rule) const
 	{
-		if (rule->left != *next_parent) throw "Invalid source stack";
-		return std::make_shared<State>(rule, shared_from_this(), next_parent);
+		if (rule->left != *frontSymbol) throw "Invalid source stack";
+		return std::make_shared<State>(rule, shared_from_this(), frontSymbol);
 	}
 	bool ruleApplicable(const Rule* rule) const
 	{
-		return rule->left == *next_parent;
+		return rule->left == *frontSymbol;
 	}
 	std::unique_ptr<TreeNode> getTree() const
 	{
@@ -202,21 +203,29 @@ class Analyzer
 	std::list<std::shared_ptr<State>> expand(const std::shared_ptr<State>& leaf)
 	{
 		std::list<std::shared_ptr<State>> leafs({ leaf });
-		std::list<std::shared_ptr<State>>::iterator state = std::begin(leafs);
-		while (state != std::end(leafs))
+		std::set<const Symbol*> expandedSymbols;
+		std::list<std::shared_ptr<State>> cycles;
+		for (std::list<std::shared_ptr<State>>::iterator state = std::begin(leafs); state != std::end(leafs);)
 		{
 			std::shared_ptr<State> leaf = *state;
-			if (leaf->next_parent->isTerminal)
+			if (leaf->frontSymbol->isTerminal)
 				state++;
+			else if (expandedSymbols.contains(*(*state)->frontSymbol))
+			{
+				cycles.push_back(*state);
+				state = leafs.erase(state);
+			}
 			else
 			{
+				expandedSymbols.insert(*(*state)->frontSymbol);
 				std::ranges::view auto leafs_to_insert =
-					std::views::transform(expandingRules[*leaf->next_parent],
+					std::views::transform(expandingRules[*leaf->frontSymbol],
 										  [&](const Rule* rule) { return leaf->advanced(rule); });
 				state = leafs.erase(state);
 				state = leafs.insert(state, leafs_to_insert.begin(), leafs_to_insert.end());
 			}
 		}
+		leafs.insert(leafs.end(), cycles.begin(), cycles.end());
 		return leafs;
 	}
 public:
@@ -268,10 +277,28 @@ public:
 		input.push_back(end_symbol);
 		std::list<std::shared_ptr<State>> leafs = { std::make_shared<State>(start_rule) };
 		for (const Symbol* i : input)
+		{
+			
 			for (std::list<std::shared_ptr<State>>::iterator leaf = std::begin(leafs); leaf != std::end(leafs); leaf = leafs.erase(leaf))
+			{
+				bool terminalChecked = false;
 				for (const std::shared_ptr<State>& expanded_leaf : expand(*leaf))
-					if (expanded_leaf->ruleApplicable(checkingRules[i]))
-						leafs.insert(leaf, expanded_leaf->advanced(checkingRules[*expanded_leaf->next_parent]));
+					if (expanded_leaf->frontSymbol->isTerminal && expanded_leaf->ruleApplicable(checkingRules[i]))
+					{
+						leafs.insert(leaf, expanded_leaf->advanced(checkingRules[*expanded_leaf->frontSymbol]));
+						terminalChecked = true;
+					}
+					else if (!expanded_leaf->frontSymbol->isTerminal && terminalChecked)
+					{
+						leafs.insert(leaf, expanded_leaf);
+					}
+			}
+			std::cout << "READING: " << i->name << std::endl;
+			for (std::shared_ptr<State> l : leafs)
+			{
+				l->getTree()->out(0);
+			}
+		}
 
 		return leafs.back()->getTree();
 	}
@@ -286,7 +313,8 @@ public:
 
 int main()
 {
-	std::unique_ptr<TreeNode> root = Analyzer(
+	std::unique_ptr<TreeNode> root;
+	/*root = Analyzer(
 		{ "a", "b", },
 		{ "A", "B", },
 		"A",
@@ -298,6 +326,7 @@ int main()
 		}
 	).analyze({ "a", "b", "a" });
 	root->out(0);
+
 	root = Analyzer(
 		{ "a", "b", "c" },
 		{ "A", "B", "C" },
@@ -309,5 +338,18 @@ int main()
 			{"C", "c"},
 		}
 	).analyze({ "b", "b", "c" });
+	root->out(0);*/
+
+	root = Analyzer(
+		{ "a", "b" },
+		{ "A", "B" },
+		"A",
+		{
+			{"A", "B", "a"},
+			{"B", "A", "b"},
+			{"A"},
+			{"B"},
+		}
+	).analyze({ "a", "b", "a"});
 	root->out(0);
 }
