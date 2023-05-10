@@ -7,6 +7,7 @@
 #include <string>
 #include <map>
 #include <ranges>
+#include <set>
 
 using namespace std::string_literals;
 
@@ -129,34 +130,35 @@ struct State: std::enable_shared_from_this<State>
 	const Rule* rule;
 	const std::shared_ptr<const State> prev;
 	SymbolPointer parent;
-	SymbolPointer next_parent;
+	SymbolPointer front_symbol;
+	std::list<std::shared_ptr<State>> cycles;
 
 	State(const Rule* rule, std::shared_ptr<const State> prev, SymbolPointer parent):
 		rule(rule),
 		prev(prev),
 		parent(parent),
-		next_parent(this, std::begin(rule->right))
+		front_symbol(this, std::begin(rule->right))
 	{
-		while (next_parent.iterator == std::end(next_parent.state->rule->right))
+		while (front_symbol.iterator == std::end(front_symbol.state->rule->right))
 		{
-			if (next_parent.state == nullptr) throw "Stack is empty";
-			next_parent = SymbolPointer(next_parent.state->parent.state, std::next(next_parent.state->parent.iterator));
+			if (front_symbol.state == nullptr) throw "Stack is empty";
+			front_symbol = SymbolPointer(front_symbol.state->parent.state, std::next(front_symbol.state->parent.iterator));
 		}
 	}
 	State(const Rule* start_rule):
 		rule(start_rule),
 		prev(nullptr),
 		parent(nullptr),
-		next_parent(this, std::begin(start_rule->right))
+		front_symbol(this, std::begin(start_rule->right))
 	{}
 	std::shared_ptr<State> advanced(const Rule* rule) const
 	{
-		if (rule->left != *next_parent) throw "Invalid source stack";
-		return std::make_shared<State>(rule, shared_from_this(), next_parent);
+		if (rule->left != *front_symbol) throw "Invalid source stack";
+		return std::make_shared<State>(rule, shared_from_this(), front_symbol);
 	}
 	bool ruleApplicable(const Rule* rule) const
 	{
-		return rule->left == *next_parent;
+		return rule->left == *front_symbol;
 	}
 	std::unique_ptr<TreeNode> getTree() const
 	{
@@ -202,20 +204,59 @@ class Analyzer
 	std::list<std::shared_ptr<State>> expand(const std::shared_ptr<State>& leaf)
 	{
 		std::list<std::shared_ptr<State>> leafs({ leaf });
-		std::list<std::shared_ptr<State>>::iterator state = std::begin(leafs);
-		while (state != std::end(leafs))
+		//std::set<const Symbol*> expandedSymbols;
+		std::list<std::shared_ptr<State>> cycles;
+		for (std::list<std::shared_ptr<State>>::iterator state = std::begin(leafs); state != std::end(leafs);)
 		{
-			std::shared_ptr<State> leaf = *state;
-			if (leaf->next_parent->isTerminal)
+			//std::shared_ptr<State> leaf = *state;
+			if (state->get()->front_symbol->isTerminal)
+			{
 				state++;
+				continue;
+			}
+			/*for (const State* l = state->get()->parent.state; l != leaf->parent.state; l = l->parent.state)
+			{
+				if (state->get()->front_symbol.getSymbol() == l->front_symbol.getSymbol())
+				{
+					stateRepeats = true;
+					break;
+				}
+			}*/
 			else
 			{
-				std::ranges::view auto leafs_to_insert =
-					std::views::transform(expandingRules[*leaf->next_parent],
-										  [&](const Rule* rule) { return leaf->advanced(rule); });
+				//expandedSymbols.insert(*(*state)->front_symbol);
+				/*std::ranges::view auto leafs_to_insert =
+					std::views::transform(expandingRules[*leaf->front_symbol],
+										  [&](const Rule* rule) { return leaf->advanced(rule); });*/
+				std::shared_ptr<State> current_state = *state;
 				state = leafs.erase(state);
-				state = leafs.insert(state, leafs_to_insert.begin(), leafs_to_insert.end());
+				for (const Rule* rule : expandingRules[current_state->front_symbol.getSymbol()])
+				{
+					std::shared_ptr<State> new_state = current_state->advanced(rule);
+					bool stateRepeats = false;
+					for (const State* l = current_state.get(); l != leaf->parent.state; l = l->parent.state)
+					{
+						if (new_state->front_symbol.getSymbol() == l->front_symbol.getSymbol())
+						{
+							stateRepeats = true;
+							break;
+						}
+					}
+					if (stateRepeats)
+					{
+						cycles.push_back(new_state);
+					}
+					else
+					{
+						state = leafs.insert(state, new_state);
+					}
+				}
+				//state = leafs.insert(state, leafs_to_insert.begin(), leafs_to_insert.end());
 			}
+		}
+		for (const std::shared_ptr<State>& leaf : leafs)
+		{
+			leaf->cycles = cycles;
 		}
 		return leafs;
 	}
@@ -271,7 +312,13 @@ public:
 			for (std::list<std::shared_ptr<State>>::iterator leaf = std::begin(leafs); leaf != std::end(leafs); leaf = leafs.erase(leaf))
 				for (const std::shared_ptr<State>& expanded_leaf : expand(*leaf))
 					if (expanded_leaf->ruleApplicable(checkingRules[i]))
-						leafs.insert(leaf, expanded_leaf->advanced(checkingRules[*expanded_leaf->next_parent]));
+					{
+						leafs.insert(leaf, expanded_leaf->advanced(checkingRules[*expanded_leaf->front_symbol]));
+						for (const std::shared_ptr<State>& cycle : expanded_leaf->cycles)
+						{
+							leafs.insert(leaf, cycle);
+						}
+					}
 
 		return leafs.back()->getTree();
 	}
@@ -298,6 +345,7 @@ int main()
 		}
 	).analyze({ "a", "b", "a" });
 	root->out(0);
+
 	root = Analyzer(
 		{ "a", "b", "c" },
 		{ "A", "B", "C" },
@@ -309,5 +357,18 @@ int main()
 			{"C", "c"},
 		}
 	).analyze({ "b", "b", "c" });
+	root->out(0);
+
+	root = Analyzer(
+		{ "a", "b" },
+		{ "A", "B" },
+		"A",
+		{
+			{"A", "B", "a"},
+			{"B", "A", "b"},
+			{"A"},
+			{"B"},
+		}
+	).analyze({ "a", "b", "a" });
 	root->out(0);
 }
