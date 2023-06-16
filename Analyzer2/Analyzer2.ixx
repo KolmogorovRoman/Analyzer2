@@ -8,6 +8,8 @@
 #include <map>
 #include <ranges>
 #include <set>
+#include <regex>
+import Tokenizer;
 
 using namespace std::string_literals;
 
@@ -379,7 +381,7 @@ int main()
 	).analyze({ "b", "b", "c" });
 	root->out(0);
 
-	root = Analyzer(
+	/*root = Analyzer(
 		{ "a", "b" },
 		{ "A", "B" },
 		"A",
@@ -390,5 +392,17 @@ int main()
 			{"B"},
 		}
 	).analyze({ "a", "b", "a" });
-	root->out(0);
+	root->out(0);*/
+
+	Tokenizer T("qwe1=abc+42"s);
+	Token::Type variable("variable", std::regex("[[:alpha:]][[:alnum:]]*"));
+	Token::Type oper("oper", std::regex("[+=]+"));
+	Token::Type integer("integer", std::regex("[[:digit:]]+"));
+
+	std::optional<Token> t;
+	t = T.getToken(variable);
+	t = T.getToken(oper);
+	t = T.getToken(variable);
+	t = T.getToken(oper);
+	t = T.getToken(integer);
 }
