@@ -15,7 +15,10 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Analyzer2.cpp">
+    <ClCompile Include="Analyzer2.ixx">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Tokenizer.ixx">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
