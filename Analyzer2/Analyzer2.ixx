@@ -132,8 +132,23 @@ struct State: std::enable_shared_from_this<State>
 	const Rule* rule;
 	const std::shared_ptr<const State> prev;
 	SymbolPointer parent;
+	std::list<const Symbol*>::iterator symbol;
 	SymbolPointer front_symbol;
-	std::list<std::shared_ptr<State>> cycles;
+	struct Cycle
+	{
+		std::shared_ptr<State> state;
+		std::list<const Symbol*>::iterator begin;
+		//std::list<const Symbol*>::iterator end;
+		Cycle(std::shared_ptr<State> state, std::list<const Symbol*>::iterator begin/*, std::list<const Symbol*>::iterator end*/):
+			state(state),
+			begin(begin)
+			//end(end)
+		{}
+		Cycle(std::shared_ptr<State> state):
+			state(state)
+		{}
+	};
+	std::list<Cycle> cycles;
 
 	State(const Rule* rule, std::shared_ptr<const State> prev, SymbolPointer parent):
 		rule(rule),
@@ -258,7 +273,8 @@ class Analyzer
 		}
 		for (const std::shared_ptr<State>& leaf : leafs)
 		{
-			leaf->cycles = cycles;
+			for (const std::shared_ptr<State>& c : cycles)
+				leaf->cycles.push_back(State::Cycle(c));
 		}
 		return leafs;
 	}
@@ -306,23 +322,27 @@ public:
 			expandingRules[left].push_back(new Rule(left, right));
 		}
 	}
-	std::unique_ptr<TreeNode> analyze(std::list<const Symbol*> input)
+	std::list<std::shared_ptr<State>> analyze(std::list<const Symbol*>::iterator begin, std::list<const Symbol*>::iterator end)
 	{
-		input.push_back(end_symbol);
 		std::list<std::shared_ptr<State>> leafs = { std::make_shared<State>(start_rule) };
-		for (const Symbol* i : input)
+		for (std::list<const Symbol*>::iterator i = begin; i != end; i = std::next(i))
 			for (std::list<std::shared_ptr<State>>::iterator leaf = std::begin(leafs); leaf != std::end(leafs); leaf = leafs.erase(leaf))
 				for (const std::shared_ptr<State>& expanded_leaf : expand(*leaf))
-					if (expanded_leaf->ruleApplicable(checkingRules[i]))
+					if (expanded_leaf->ruleApplicable(checkingRules[*i]))
 					{
-						leafs.insert(leaf, expanded_leaf->advanced(checkingRules[*expanded_leaf->front_symbol]));
-						for (const std::shared_ptr<State>& cycle : expanded_leaf->cycles)
+						leafs.insert(leaf, expanded_leaf->advanced(checkingRules[*i]));
+						for (State::Cycle& cycle : expanded_leaf->cycles)
 						{
-							leafs.insert(leaf, cycle);
+							cycle.begin = i;
 						}
 					}
 
-		return leafs.back()->getTree();
+		return leafs;
+	}
+	std::unique_ptr<TreeNode> analyze(std::list<const Symbol*> input)
+	{
+		input.push_back(end_symbol);
+		return analyze(input.begin(), input.end()).front()->getTree();
 	}
 	std::unique_ptr<TreeNode> analyze(std::list<std::string> text_input)
 	{
@@ -361,7 +381,7 @@ int main()
 	).analyze({ "b", "b", "c" });
 	root->out(0);
 
-	root = Analyzer(
+	/*root = Analyzer(
 		{ "a", "b" },
 		{ "A", "B" },
 		"A",
@@ -372,7 +392,7 @@ int main()
 			{"B"},
 		}
 	).analyze({ "a", "b", "a" });
-	root->out(0);
+	root->out(0);*/
 
 	Tokenizer T("qwe1=abc+42"s);
 	Token::Type variable("variable", std::regex("[[:alpha:]][[:alnum:]]*"));
