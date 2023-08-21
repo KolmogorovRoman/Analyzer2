@@ -3,7 +3,13 @@
   <Type Name="Rule">
     <DisplayString>{view}</DisplayString>
   </Type>
+  <Type Name="State">
+    <DisplayString>[{dbg_depth}] {*rule}</DisplayString>
+  </Type>
+  <Type Name="TreeNode">
+    <DisplayString>{*rule} {tokenizer}</DisplayString>
+  </Type>
   <Type Name="StackMachineState::SymbolPointer">
-    <DisplayString>{iterator}</DisplayString>
+    <DisplayString>{*iterator}</DisplayString>
   </Type>
 </AutoVisualizer>
