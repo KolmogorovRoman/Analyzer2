@@ -1,0 +1,33 @@
+{
+	v=rand 100;
+	s=50;
+	m=25;
+	def o(v)
+	{
+		out v;
+	}
+	while v!=s
+	{
+		if v>s
+		{
+			#out 'v > ';
+			o('v > ');
+			out s;
+			outln;
+			#get s;
+			s=s+m;
+		}
+		else if v<s
+		{
+			print('v < ');
+			out s;
+			outln;
+			#get s;
+			s=s-m;
+		}
+		m=(m+1)//2;
+	}
+	out 'v = ';
+	out s;
+	outln;
+}

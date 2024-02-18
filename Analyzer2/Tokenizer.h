@@ -8,7 +8,7 @@ struct Token
 	{
 		std::string dbg_name;
 		std::regex regex;
-		Type(std::string name, std::regex regex);
+		Type(std::string dbg_name, std::regex regex);
 		static Token::Type eof;
 	};
 	Type type;
@@ -18,9 +18,9 @@ struct Token
 
 class Tokenizer
 {
+public:
 	const std::string* code;
 	std::string::const_iterator head;
-public:
 	Tokenizer(const std::string& code);
 	Tokenizer(const std::string& code, std::string::const_iterator head);
 	Tokenizer& operator=(const Tokenizer& other);
