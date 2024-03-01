@@ -54,7 +54,7 @@ template<class T, class... Childs>
 template<size_t... inds>
 TreeNode2<T, Childs...>::TreeNode2(const HistoryState* state, std::index_sequence<inds...>):
 	TreeNode1<T>(state),
-	childs(static_cast<const Rule1<typename ChildFiller<Childs>::rule_type>*>(state->childs[inds]->state->rule)->make_tree_node(state->childs[inds].get())...)
+	childs(static_cast<const Rule1<typename ChildFiller<Childs>::rule_type>*>(state->childs[inds]->rule)->make_tree_node(state->childs[inds].get())...)
 {}
 template<class T, class... Childs>
 template <std::size_t... Is>
@@ -81,4 +81,3 @@ T TreeNode2<T, Childs...>::get()
 	std::tuple<Childs...> tuple_childs = fill_childs(std::index_sequence_for<Childs...>());
 	return std::apply(static_cast<const Rule2<T, Childs...>*>(TreeNode0::rule)->get, tuple_childs);
 }
-

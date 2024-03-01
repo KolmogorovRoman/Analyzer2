@@ -34,12 +34,20 @@ public:
 			rules)
 	{
 		start_rule = new Rule2<nullptr_t, Start, Token>(nullptr, { start, end_symbol, nullptr }, start->dbg_name);
-		for (const Symbol& symbol : symbols)
-		{
-			if (symbol.is<const Terminal*>())
-				checkingRules[symbol.as<const Terminal*>()] = Rule2<Token>::makeChecking(symbol.as<const Terminal*>());
-		}
-		checkingRules[end_symbol] = Rule2<Token>::makeChecking(end_symbol);
+
+		RuleNode* rn = &rootRuleNode.continuations[start_rule->left];
+		rn->symbol = start;
+		startRuleNode = rn;
+		rn = &rn->continuations[end_symbol];
+		rn->symbol = end_symbol;
+		rn->rule = start_rule;
+
+		//for (const Symbol& symbol : symbols)
+		//{
+		//	if (symbol.is<const Terminal*>())
+		//		checkingRules[symbol.as<const Terminal*>()] = Rule2<Token>::makeChecking(symbol.as<const Terminal*>());
+		//}
+		//checkingRules[end_symbol] = Rule2<Token>::makeChecking(end_symbol);
 	}
 	TreeNode1<Start>* analyze(const std::string& code)
 	{
@@ -128,17 +136,17 @@ class AnalyzerBuilder
 	}
 public:
 	AnalyzerBuilder():
-		token_terminal("token_terminal", std::regex("[[:lower:][:punct:]]+")),
-		token_non_terminal("token_non_terminal", std::regex("[[:upper:]][[:alnum:]]*")),
-		token_arrow("token_arrow", std::regex("->")),
+		token_terminal("terminal", std::regex("[[:lower:][:punct:]]+")),
+		token_non_terminal("non_terminal", std::regex("[[:upper:]][[:alnum:]]*")),
+		token_arrow("arrow", std::regex("->")),
 		//token_spaces("token_spaces", std::regex("\\s+")),
 		terminal_terminal(new Terminal(token_terminal)),
 		terminal_non_terminal(new Terminal(token_non_terminal)),
 		terminal_arrow(new Terminal(token_arrow)),
 		//terminal_spaces(new Terminal(token_spaces)),
-		non_terminal_rule(new NonTerminal("non_terminal_rule"s)),
-		non_terminal_symbol(new NonTerminal("non_terminal_symbol"s)),
-		non_terminal_symbol_sequence(new NonTerminal("non_terminal_symbol_sequence"s)),
+		non_terminal_rule(new NonTerminal("Rule"s)),
+		non_terminal_symbol(new NonTerminal("Symbol"s)),
+		non_terminal_symbol_sequence(new NonTerminal("Symbol_sequence"s)),
 		analyzer_rules
 		{
 			new Rule2<std::string, Token>(non_terminal_symbol, { terminal_terminal },
@@ -228,7 +236,8 @@ public:
 	template<class T, class... Childs>
 	AnalyzerBuilder& add_rule(std::string s_rule, std::function<T(Childs...)> get)
 	{
-		RuleStrings rule_strings(rules_analyzer.analyze(s_rule)->get());
+		TreeNode1<RuleStrings>* tn = rules_analyzer.analyze(s_rule);
+		RuleStrings rule_strings(tn->get());
 		const NonTerminal* left = getNonTerminal(rule_strings.left);
 		std::vector<Symbol> right;
 		for (const std::string& r : rule_strings.right)
@@ -246,8 +255,7 @@ public:
 		std::list<Symbol> symbols_list;
 		for (const std::pair<std::string, Symbol>& s : symbols)
 			symbols_list.push_back(s.second);
-		Analyzer<Start> analyzer(symbols_list, getNonTerminal(start), rules);
-		return analyzer;
+		return Analyzer<Start>(symbols_list, getNonTerminal(start), rules);
 	}
 };
 
@@ -686,7 +694,7 @@ int main()
 	abtest.add_rule("A->a A d", std::function([](Token, int i, Token)->int { return i + 1; }));
 	abtest.add_rule("A->a A e", std::function([](Token, int i, Token)->int { return i + 1; }));
 	abtest.add_rule("A->", std::function([]()->int { return 0; }));
-	TreeNode1<nullptr_t>* programtest = abtest.build("A"s).analyze("a a a a b b b b");
+	TreeNode1<nullptr_t>* programtest = abtest.build("A"s).analyze("a a a a a a a a b b b b b d c e");
 	programtest->out(0);
 
 	return 0;

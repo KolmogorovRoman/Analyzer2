@@ -10,6 +10,7 @@ Token::Token(Type type, std::string value):
 	type(type), value(value)
 {}
 
+Token::Type Token::Type::empty("", std::regex(""));
 Token::Type Token::Type::eof("eof", std::regex("$"));
 
 Tokenizer::Tokenizer(const std::string& code):
@@ -26,10 +27,10 @@ Tokenizer& Tokenizer::operator=(const Tokenizer& other)
 	this->head = other.head;
 	return *this;
 }
-int checkTokenCalls = 0;
-bool Tokenizer::checkToken(Token::Type type)
+//int checkTokenCalls = 0;
+bool Tokenizer::checkToken(Token::Type type) const
 {
-	checkTokenCalls++;
+	//checkTokenCalls++;
 	std::match_results<std::string::const_iterator> m;
 	std::regex_search(head, code->cend(), m, type.regex, std::regex_constants::match_continuous);
 	return !m.empty();
@@ -41,10 +42,10 @@ std::optional<Token> Tokenizer::getToken(Token::Type type) const
 	if (m.empty()) return std::optional<Token>();
 	else return Token(type, m.str());
 }
-int advancedCalls = 0;
+//int advancedCalls = 0;
 Tokenizer Tokenizer::advanced(Token::Type type) const
 {
-	advancedCalls++;
+	//advancedCalls++;
 	std::match_results<std::string::const_iterator> m;
 	std::regex_search(head, code->cend(), m, type.regex, std::regex_constants::match_continuous);
 	std::match_results<std::string::const_iterator> m1;

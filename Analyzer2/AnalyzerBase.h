@@ -27,6 +27,7 @@ struct State;
 struct HistoryState;
 
 struct Rule0;
+struct RuleNode;
 template <class T> struct Rule1;
 template <class T, class... Childs> struct Rule2;
 
@@ -52,6 +53,7 @@ struct NonTerminal
 struct Symbol: std::variant</*nullptr_t,*/ const Terminal*, const NonTerminal*>
 {
 	std::string dbg_name;
+	Symbol();
 	Symbol(nullptr_t);
 	Symbol(const Terminal* terminal);
 	Symbol(const NonTerminal* non_terminal);
@@ -65,48 +67,54 @@ struct Symbol: std::variant</*nullptr_t,*/ const Terminal*, const NonTerminal*>
 
 struct State: std::enable_shared_from_this<State>
 {
-	struct SymbolPointer
-	{
-		const State* state;
-		std::vector<Symbol>::const_iterator iterator;
-		SymbolPointer(const State* state, std::vector<Symbol>::const_iterator iterator);
-		SymbolPointer(std::nullptr_t = nullptr);
-		Symbol getSymbol() const;
-		Symbol operator->() const;
-		Symbol operator*() const;
-	};
+	//struct SymbolPointer
+	//{
+	//	const State* state;
+	//	std::vector<Symbol>::const_iterator iterator;
+	//	const RuleNode* ruleNode;
+	//	SymbolPointer(const State* state, std::vector<Symbol>::const_iterator iterator);
+	//	SymbolPointer(const RuleNode* ruleNode, std::vector<Symbol>::const_iterator iterator);
+	//	SymbolPointer(std::nullptr_t = nullptr);
+	//	Symbol getSymbol() const;
+	//	Symbol operator->() const;
+	//	Symbol operator*() const;
+	//};
 
-	const Rule0* rule;
+	using SymbolPointer = const State*;
+
+	const RuleNode* ruleNode;
 	const std::shared_ptr<const State> prev;
 	SymbolPointer parent;
-	std::list<Symbol>::iterator symbol;
-	SymbolPointer front_symbol;
-	Tokenizer tokenizer;
+	const Tokenizer tokenizer;
 	std::list<const State*> dbg_hist;
 	std::list<std::string> dbg_stack;
 	int dbg_depth;
-	struct Cycle
-	{
-		std::shared_ptr<State> state;
-		std::shared_ptr<State> begin;
-		//bool passed = false;
-		friend bool operator == (const Cycle& c1, const Cycle& c2);
-		Cycle(std::shared_ptr<State> state, std::shared_ptr<State> begin);
-		Cycle(std::shared_ptr<State> state);
-	};
-	std::map<const Rule0*, Cycle> cycles;
+	//struct Cycle
+	//{
+	//	std::shared_ptr<State> state;
+	//	std::shared_ptr<State> begin;
+	//	//bool passed = false;
+	//	friend bool operator == (const Cycle& c1, const Cycle& c2);
+	//	Cycle(std::shared_ptr<State> state, std::shared_ptr<State> begin);
+	//	Cycle(std::shared_ptr<State> state);
+	//};
+	//std::map<const Rule0*, Cycle> cycles;
 
 	State(const Rule0* rule, std::shared_ptr<const State> prev, SymbolPointer parent);
-	State(const Rule0* start_rule, const std::string& code);
+	State(const RuleNode* ruleNode, std::shared_ptr<const State> prev, SymbolPointer parent);
+	static std::shared_ptr<const State> make(const RuleNode* ruleNode, std::shared_ptr<const State> prev, SymbolPointer parent);
+	State(const RuleNode* startRuleNode, const std::string& code);
 	bool isParentOf(const State& mbChild) const;
 	bool isChildOf(const State& mbParent) const;
-	bool ruleApplicable(const Rule0* rule) const;
-	std::shared_ptr<State> advanced(const Rule0* rule) const;
+	std::list<std::shared_ptr<const State>> expanded(const RuleNode* rootRuleNode) const;
+	std::list<std::shared_ptr<const State>> continued(std::shared_ptr<const State> current) const;
 	std::unique_ptr<HistoryState> getTree() const;
 };
 struct HistoryState
 {
-	std::shared_ptr<const State> state;
+	//std::shared_ptr<const State> state;
+	const Rule0* rule;
+	const Tokenizer tokenizer;
 	HistoryState* parent;
 	std::vector<std::unique_ptr<HistoryState>> childs;
 	HistoryState(std::shared_ptr<const State> state);
@@ -123,6 +131,17 @@ struct Rule0
 	Rule0(const NonTerminal* left, const std::vector<Symbol>& right);
 	//static Rule0* makeStart(const NonTerminal* start, const Terminal* end);
 	//virtual TreeNode0* make_tree_node(const HistoryState* state) const = 0;
+};
+
+struct RuleNode
+{
+	//const RuleNode* parent;
+	const Rule0* rule;
+	Symbol symbol;
+	std::map<Symbol, RuleNode> continuations;
+
+	RuleNode();
+	RuleNode(const RuleNode&) = delete;
 };
 
 template <class T>
@@ -221,18 +240,15 @@ class AnalyzerBase
 {
 protected:
 	//std::map<std::string, Symbol> symbolbyName;
+	const Terminal* empty_symbol;
 	const Terminal* end_symbol;
 	const Rule0* start_rule;
-	struct RuleNode
-	{
-		//const RuleNode* parent;
-		std::optional<const Rule0*> rule;
-		std::map<Symbol, RuleNode> childs;
-	};
-	std::map<Symbol, RuleNode> rootRuleNodes;
+	//std::map<Symbol, RuleNode> rootRuleNodes;
+	RuleNode rootRuleNode;
+	RuleNode* startRuleNode;
 	std::map<const NonTerminal*, std::list<const Rule0*>> expandingRules;
 	std::map<const Terminal*, Rule0*> checkingRules;
-	std::list<std::shared_ptr<State>> expand(const std::shared_ptr<State>& leaf);
+	//std::list<std::shared_ptr<State>> expand(const std::shared_ptr<State>& leaf);
 public:
 	AnalyzerBase(std::list<Symbol> symbols, /*const Rule0* start_rule, std::map<const Terminal*, Rule0*> checkingRules, */ std::list<const Rule0*> rules);
 	std::unique_ptr<HistoryState> analyze(const std::string& code);
