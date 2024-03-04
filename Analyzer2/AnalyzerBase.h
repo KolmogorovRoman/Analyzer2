@@ -59,32 +59,25 @@ struct Symbol: std::variant</*nullptr_t,*/ const Terminal*, const NonTerminal*>
 	Symbol(const NonTerminal* non_terminal);
 	bool isTerminal() const;
 	Symbol* operator->();
+	bool operator ==(const Symbol& other) const;
 	template <class T>
 	bool is() const;
 	template <class T>
 	T as() const;
+	const Terminal* asTerminal() const;
+	const NonTerminal* asNonTerminal() const;
+
+	//static Symbol eof;
+	//static Symbol empty;
 };
 
 struct State: std::enable_shared_from_this<State>
 {
-	//struct SymbolPointer
-	//{
-	//	const State* state;
-	//	std::vector<Symbol>::const_iterator iterator;
-	//	const RuleNode* ruleNode;
-	//	SymbolPointer(const State* state, std::vector<Symbol>::const_iterator iterator);
-	//	SymbolPointer(const RuleNode* ruleNode, std::vector<Symbol>::const_iterator iterator);
-	//	SymbolPointer(std::nullptr_t = nullptr);
-	//	Symbol getSymbol() const;
-	//	Symbol operator->() const;
-	//	Symbol operator*() const;
-	//};
-
-	using SymbolPointer = const State*;
+	//using SymbolPointer = const State*;
 
 	const RuleNode* ruleNode;
 	const std::shared_ptr<const State> prev;
-	SymbolPointer parent;
+	const State* parent;
 	const Tokenizer tokenizer;
 	std::list<const State*> dbg_hist;
 	std::list<std::string> dbg_stack;
@@ -100,13 +93,13 @@ struct State: std::enable_shared_from_this<State>
 	//};
 	//std::map<const Rule0*, Cycle> cycles;
 
-	State(const Rule0* rule, std::shared_ptr<const State> prev, SymbolPointer parent);
-	State(const RuleNode* ruleNode, std::shared_ptr<const State> prev, SymbolPointer parent);
-	static std::shared_ptr<const State> make(const RuleNode* ruleNode, std::shared_ptr<const State> prev, SymbolPointer parent);
+	State(const Rule0* rule, std::shared_ptr<const State> prev, const State* parent);
+	State(const RuleNode* ruleNode, std::shared_ptr<const State> prev, const State* parent);
+	static std::shared_ptr<const State> make(const RuleNode* ruleNode, std::shared_ptr<const State> prev, const State* parent);
 	State(const RuleNode* startRuleNode, const std::string& code);
 	bool isParentOf(const State& mbChild) const;
 	bool isChildOf(const State& mbParent) const;
-	std::list<std::shared_ptr<const State>> expanded(const RuleNode* rootRuleNode) const;
+	std::list<std::shared_ptr<const State>> expanded(const std::map<Symbol, RuleNode>& rootRuleNodes) const;
 	std::list<std::shared_ptr<const State>> continued(std::shared_ptr<const State> current) const;
 	std::unique_ptr<HistoryState> getTree() const;
 };
@@ -135,12 +128,13 @@ struct Rule0
 
 struct RuleNode
 {
-	//const RuleNode* parent;
 	const Rule0* rule;
 	Symbol symbol;
 	std::map<Symbol, RuleNode> continuations;
+	//std::list<RuleNode> continuations;
 
 	RuleNode();
+	RuleNode(const Rule0* rule, Symbol symbol);
 	RuleNode(const RuleNode&) = delete;
 };
 
@@ -204,7 +198,7 @@ struct ChildFiller<TreeNode1<T>*>
 template<class T, class... Childs>
 struct TreeNode2: public TreeNode1<T>
 {
-	
+
 	std::tuple<typename ChildFiller<Childs>::stored_type...> childs;
 	template <size_t... inds>
 	TreeNode2(const HistoryState* state, std::index_sequence<inds...>);
@@ -243,8 +237,8 @@ protected:
 	const Terminal* empty_symbol;
 	const Terminal* end_symbol;
 	const Rule0* start_rule;
-	//std::map<Symbol, RuleNode> rootRuleNodes;
-	RuleNode rootRuleNode;
+	std::map<Symbol, RuleNode> rootRuleNodes;
+	//RuleNode rootRuleNode;
 	RuleNode* startRuleNode;
 	std::map<const NonTerminal*, std::list<const Rule0*>> expandingRules;
 	std::map<const Terminal*, Rule0*> checkingRules;

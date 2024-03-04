@@ -35,7 +35,7 @@ public:
 	{
 		start_rule = new Rule2<nullptr_t, Start, Token>(nullptr, { start, end_symbol, nullptr }, start->dbg_name);
 
-		RuleNode* rn = &rootRuleNode.continuations[start_rule->left];
+		RuleNode* rn = &rootRuleNodes[start_rule->left];
 		rn->symbol = start;
 		startRuleNode = rn;
 		rn = &rn->continuations[end_symbol];

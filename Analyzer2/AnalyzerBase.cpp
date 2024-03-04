@@ -32,6 +32,22 @@ Symbol* Symbol::operator->()
 {
 	return this;
 }
+bool Symbol::operator==(const Symbol& other) const
+{
+	return std::operator==(*this, other);
+}
+//Symbol Symbol::empty(new Terminal(Token::Type::empty));
+//Symbol Symbol::eof(new Terminal(Token::Type::eof));
+
+const Terminal* Symbol::asTerminal() const
+{
+	return this->as<const Terminal*>();
+}
+
+const NonTerminal* Symbol::asNonTerminal() const
+{
+	return this->as<const NonTerminal*>();
+}
 
 
 //State::SymbolPointer::SymbolPointer(const State* state, std::vector<Symbol>::const_iterator iterator):
@@ -84,9 +100,13 @@ void HistoryState::out(int offset) const
 RuleNode::RuleNode():
 	rule(nullptr)
 {}
+RuleNode::RuleNode(const Rule0* rule, Symbol symbol):
+	rule(rule),
+	symbol(symbol)
+{}
 
 
-State::State(const Rule0* rule, std::shared_ptr<const State> prev, SymbolPointer parent):
+State::State(const Rule0* rule, std::shared_ptr<const State> prev, const State* parent):
 	prev(prev),
 	parent(parent),
 	tokenizer(ruleNode->symbol.isTerminal() ?
@@ -112,12 +132,12 @@ State::State(const Rule0* rule, std::shared_ptr<const State> prev, SymbolPointer
 	//	front_symbol = SymbolPointer(front_symbol.state->parent.state, std::next(front_symbol.state->parent.iterator));
 	//}
 }
-State::State(const RuleNode* ruleNode, std::shared_ptr<const State> prev, SymbolPointer parent):
+State::State(const RuleNode* ruleNode, std::shared_ptr<const State> prev, const State* parent):
 	ruleNode(ruleNode),
 	prev(prev),
 	parent(parent),
 	tokenizer((parent != nullptr && parent->ruleNode->symbol.isTerminal()) ?
-		prev->tokenizer.advanced(parent->ruleNode->symbol.as<const Terminal*>()->token_type) :
+		prev->tokenizer.advanced(parent->ruleNode->symbol.asTerminal()->token_type) :
 		prev->tokenizer)
 {
 	//dbg_hist = prev->dbg_hist;
@@ -132,9 +152,9 @@ State::State(const RuleNode* ruleNode, std::shared_ptr<const State> prev, Symbol
 	//if (ruleNode->rule->left.isTerminal())
 	//	tokenizer = prev->tokenizer.advanced(ruleNode->rule->left.as<const Terminal*>()->token_type);
 }
-std::shared_ptr<const State> State::make(const RuleNode* ruleNode, std::shared_ptr<const State> prev, SymbolPointer parent)
+std::shared_ptr<const State> State::make(const RuleNode* ruleNode, std::shared_ptr<const State> prev, const State* parent)
 {
-	if (!ruleNode->symbol.isTerminal() || prev->tokenizer.checkToken(ruleNode->symbol.as<const Terminal*>()->token_type))
+	if (!ruleNode->symbol.isTerminal() || prev->tokenizer.checkToken(ruleNode->symbol.asTerminal()->token_type))
 		return std::make_shared<State>(ruleNode, prev, parent);
 	else return nullptr;
 }
@@ -159,7 +179,7 @@ bool State::isChildOf(const State& mbParent) const
 {
 	return mbParent.isParentOf(*this);
 }
-std::list<std::shared_ptr<const State>> State::expanded(const RuleNode* rootRuleNode) const
+std::list<std::shared_ptr<const State>> State::expanded(const std::map<Symbol, RuleNode>& rootRuleNodes) const
 {
 	//if (!ruleApplicable(rule)) throw "Invalid source stack";
 	//if (ruleNode->symbol.isTerminal())
@@ -167,7 +187,7 @@ std::list<std::shared_ptr<const State>> State::expanded(const RuleNode* rootRule
 	std::list<std::shared_ptr<const State>> states;
 	//if (rootRuleNode->continuations.at(ruleNode->symbol).rule != nullptr)
 	//	states.push_back(shared_from_this());
-	for (const std::pair<const Symbol, RuleNode>& sr : rootRuleNode->continuations.at(ruleNode->symbol).continuations)
+	for (const std::pair<const Symbol, RuleNode>& sr : rootRuleNodes.at(ruleNode->symbol).continuations)
 	{
 		shared_ptr<const State> state = State::make(&sr.second, shared_from_this(), this);
 		if (state != nullptr)
@@ -195,7 +215,7 @@ std::unique_ptr<HistoryState> State::getTree() const
 	while (state != nullptr)
 	{
 		//if (!(state->parent!=nullptr && state->parent->ruleNode->symbol.isTerminal()))
-			statesList.push_front(state);
+		statesList.push_front(state);
 		state = state->prev;
 	}
 
@@ -212,8 +232,8 @@ std::unique_ptr<HistoryState> State::getTree() const
 			parentNode = parentNode->parent;
 		}
 		if (state->ruleNode->rule != nullptr) parentNode->rule = state->ruleNode->rule;
-		if (state->parent != nullptr && state->parent->ruleNode->symbol.isTerminal())
-			continue;
+		//if (state->parent != nullptr && state->parent->ruleNode->symbol.isTerminal())
+		//	continue;
 		std::unique_ptr<HistoryState> node = std::make_unique<HistoryState>(state);
 		node->parent = parentNode;
 		parentNode->childs.push_back(std::move(node));
@@ -314,7 +334,7 @@ AnalyzerBase::AnalyzerBase(std::list<Symbol> symbols, /*const Rule0* start_rule,
 	{
 		expandingRules[rule->left.as<const NonTerminal*>()].push_back(rule);
 
-		RuleNode* rn = &rootRuleNode.continuations[rule->left];
+		RuleNode* rn = &rootRuleNodes[rule->left];
 		rn->symbol = rule->left;
 		for (const Symbol& s : rule->right)
 		{
@@ -334,7 +354,7 @@ AnalyzerBase::AnalyzerBase(std::list<Symbol> symbols, /*const Rule0* start_rule,
 		if (symbol.is<const Terminal*>())
 		{
 			checkingRules[symbol.as<const Terminal*>()] = Rule2<Token>::makeChecking(symbol.as<const Terminal*>());
-			RuleNode* rn = &rootRuleNode.continuations[symbol];
+			RuleNode* rn = &rootRuleNodes[symbol];
 			rn->symbol = symbol;
 			rn = &rn->continuations[empty_symbol];
 			rn->symbol = empty_symbol;
@@ -342,16 +362,16 @@ AnalyzerBase::AnalyzerBase(std::list<Symbol> symbols, /*const Rule0* start_rule,
 		}
 	}
 	checkingRules[end_symbol] = Rule2<Token>::makeChecking(end_symbol);
-	rootRuleNode.continuations[end_symbol].symbol = end_symbol;
-	rootRuleNode.continuations[end_symbol].continuations[empty_symbol].symbol = empty_symbol;
-	rootRuleNode.continuations[end_symbol].continuations[empty_symbol].rule = checkingRules[end_symbol];
+	rootRuleNodes[end_symbol].symbol = end_symbol;
+	rootRuleNodes[end_symbol].continuations[empty_symbol].symbol = empty_symbol;
+	rootRuleNodes[end_symbol].continuations[empty_symbol].rule = checkingRules[end_symbol];
 }
 std::unique_ptr<HistoryState> AnalyzerBase::analyze(const std::string& code)
 {
 	std::list<std::shared_ptr<const State>> leafs = { std::make_shared<State>(startRuleNode, code) };
 	for (std::list<std::shared_ptr<const State>>::iterator leaf = std::begin(leafs); leaf != std::end(leafs); leaf = leafs.erase(leaf))
 	{
-		if (leaf->get()->parent!=nullptr && leaf->get()->parent->ruleNode->symbol.isTerminal() && leaf->get()->parent->ruleNode->symbol.as<const Terminal*>() == end_symbol)
+		if (leaf->get()->parent != nullptr && leaf->get()->parent->ruleNode->symbol.isTerminal() && leaf->get()->parent->ruleNode->symbol == end_symbol)
 			leafs.insert(leaf, *leaf);
 		//if (!leaf->get()->ruleNode->symbol.isTerminal())
 		//	leafs.append_range(leaf->get()->expanded(&rootRuleNode));
@@ -361,10 +381,10 @@ std::unique_ptr<HistoryState> AnalyzerBase::analyze(const std::string& code)
 		//	//	leaf = leaf;
 		//	leafs.append_range(leaf->get()->continued(*leaf));
 		//}
-		else if (leaf->get()->ruleNode->symbol.isTerminal() && leaf->get()->ruleNode->symbol.as<const Terminal*>() == empty_symbol)
+		else if (leaf->get()->ruleNode->symbol.isTerminal() && leaf->get()->ruleNode->symbol == empty_symbol)
 			leafs.append_range(leaf->get()->continued(*leaf));
 		else
-			leafs.append_range(leaf->get()->expanded(&rootRuleNode));
+			leafs.append_range(leaf->get()->expanded(rootRuleNodes));
 		if (leafs.size() == 1)
 		{
 			//leafs.front()->getTree()->out(0);
