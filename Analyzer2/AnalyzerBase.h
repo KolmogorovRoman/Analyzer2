@@ -84,23 +84,23 @@ struct State: std::enable_shared_from_this<State>
 	int dbg_depth;
 	//struct Cycle
 	//{
-	//	std::shared_ptr<State> state;
-	//	std::shared_ptr<State> begin;
-	//	//bool passed = false;
-	//	friend bool operator == (const Cycle& c1, const Cycle& c2);
-	//	Cycle(std::shared_ptr<State> state, std::shared_ptr<State> begin);
-	//	Cycle(std::shared_ptr<State> state);
+	//	const State* start;
+	//	std::shared_ptr<const State> state;
+	//	Cycle(const State* start, std::shared_ptr<const State> state);
 	//};
 	//std::map<const Rule0*, Cycle> cycles;
+	const State* cycle_start;
+	const State* cycle_end;
 
 	State(const Rule0* rule, std::shared_ptr<const State> prev, const State* parent);
-	State(const RuleNode* ruleNode, std::shared_ptr<const State> prev, const State* parent);
-	static std::shared_ptr<const State> make(const RuleNode* ruleNode, std::shared_ptr<const State> prev, const State* parent);
+	State(const RuleNode* ruleNode, const Tokenizer& tokenizer, std::shared_ptr<const State> prev, const State* parent, const State* cycle_start, const State* cycle_end);
+	//using make_result = std::variant<std::monostate, std::shared_ptr<const State>, Cycle>;
+	static /*make_result*/std::shared_ptr<const State> make(const RuleNode* ruleNode, std::shared_ptr<const State> prev, const State* parent);
 	State(const RuleNode* startRuleNode, const std::string& code);
 	bool isParentOf(const State& mbChild) const;
 	bool isChildOf(const State& mbParent) const;
-	std::list<std::shared_ptr<const State>> expanded(const std::map<Symbol, RuleNode>& rootRuleNodes) const;
-	std::list<std::shared_ptr<const State>> continued(std::shared_ptr<const State> current) const;
+	std::pair<std::list<std::shared_ptr<const State>>, std::list<std::shared_ptr<const State>>> expanded(const std::map<Symbol, RuleNode>& rootRuleNodes) const;
+	std::list<std::shared_ptr<const State>> continued(std::shared_ptr<const State> source, const std::map<Symbol, RuleNode>& rootRuleNodes) const;
 	std::unique_ptr<HistoryState> getTree() const;
 };
 struct HistoryState
@@ -136,6 +136,9 @@ struct RuleNode
 	RuleNode();
 	RuleNode(const Rule0* rule, Symbol symbol);
 	RuleNode(const RuleNode&) = delete;
+
+	bool isChecking() const;
+	bool isChecking(const Terminal* mbTerminal) const;
 };
 
 template <class T>
@@ -245,7 +248,7 @@ protected:
 	//std::list<std::shared_ptr<State>> expand(const std::shared_ptr<State>& leaf);
 public:
 	AnalyzerBase(std::list<Symbol> symbols, /*const Rule0* start_rule, std::map<const Terminal*, Rule0*> checkingRules, */ std::list<const Rule0*> rules);
-	std::unique_ptr<HistoryState> analyze(const std::string& code);
+	std::unique_ptr<HistoryState> analyze(const std::string& code, bool dbg_out=false);
 };
 
 #include "AnalyzerBase.hpp"

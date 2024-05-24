@@ -49,9 +49,9 @@ public:
 		//}
 		//checkingRules[end_symbol] = Rule2<Token>::makeChecking(end_symbol);
 	}
-	TreeNode1<Start>* analyze(const std::string& code)
+	TreeNode1<Start>* analyze(const std::string& code, bool dbg_out = false)
 	{
-		std::unique_ptr<HistoryState> hist = AnalyzerBase::analyze(code);
+		std::unique_ptr<HistoryState> hist = AnalyzerBase::analyze(code, dbg_out);
 		TreeNode2<nullptr_t, Start, Token>* start_node = new TreeNode2<nullptr_t, Start, Token>(hist.get(), std::make_index_sequence<2>());
 		return std::get<0>(start_node->childs);
 	}
@@ -682,20 +682,30 @@ int main()
 	//program->out(0);
 	//program->get();
 
-	AnalyzerBuilder<nullptr_t> abtest;
-	//abtest.add_rule("A->a A B", std::function([](Token, int i, int i1)->int { return i + i1; }));
-	//abtest.add_rule("B->b", std::function([](Token)->int { return 1; }));
-	//abtest.add_rule("B->c", std::function([](Token)->int { return 1; }));
-	//abtest.add_rule("B->d", std::function([](Token)->int { return 1; }));
-	//abtest.add_rule("B->e", std::function([](Token)->int { return 1; }));
+	//AnalyzerBuilder<nullptr_t> abtest;
+	////abtest.add_rule("A->a A B", std::function([](Token, int i, int i1)->int { return i + i1; }));
+	////abtest.add_rule("B->b", std::function([](Token)->int { return 1; }));
+	////abtest.add_rule("B->c", std::function([](Token)->int { return 1; }));
+	////abtest.add_rule("B->d", std::function([](Token)->int { return 1; }));
+	////abtest.add_rule("B->e", std::function([](Token)->int { return 1; }));
+	////abtest.add_rule("A->", std::function([]()->int { return 0; }));
+	//abtest.add_rule("A->a A b", std::function([](Token, int i, Token)->int { return i + 1; }));
+	//abtest.add_rule("A->a A c", std::function([](Token, int i, Token)->int { return i + 1; }));
+	//abtest.add_rule("A->a A d", std::function([](Token, int i, Token)->int { return i + 1; }));
+	//abtest.add_rule("A->a A e", std::function([](Token, int i, Token)->int { return i + 1; }));
 	//abtest.add_rule("A->", std::function([]()->int { return 0; }));
-	abtest.add_rule("A->a A b", std::function([](Token, int i, Token)->int { return i + 1; }));
-	abtest.add_rule("A->a A c", std::function([](Token, int i, Token)->int { return i + 1; }));
-	abtest.add_rule("A->a A d", std::function([](Token, int i, Token)->int { return i + 1; }));
-	abtest.add_rule("A->a A e", std::function([](Token, int i, Token)->int { return i + 1; }));
-	abtest.add_rule("A->", std::function([]()->int { return 0; }));
-	TreeNode1<nullptr_t>* programtest = abtest.build("A"s).analyze("a a a a a a a a b b b b b d c e");
-	programtest->out(0);
+	//TreeNode1<nullptr_t>* programtest = abtest.build("A"s).analyze("a a a a a a a a b b b b b d c e");
+	//programtest->out(0);
+
+	AnalyzerBuilder<std::string> abtest1;
+	abtest1.add_rule("S->S A B", std::function([](std::string S, int A, int B)->std::string { return S + std::to_string(A) + std::to_string(B); }));
+	abtest1.add_rule("S->", std::function([]()->std::string { return ""s; }));
+	abtest1.add_rule("A->A a", std::function([](int A, Token)->int { return A + 1; }));
+	abtest1.add_rule("A->a", std::function([](Token)->int { return 1; }));
+	abtest1.add_rule("B->B b", std::function([](int B, Token)->int { return B + 1; }));
+	abtest1.add_rule("B->b", std::function([](Token)->int { return 1; }));
+	TreeNode1<std::string>* programtest1 = abtest1.build("S"s).analyze("a a b b b a b b", true);
+	programtest1->out(0);
 
 	return 0;
 }
