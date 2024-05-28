@@ -100,7 +100,7 @@ struct State: std::enable_shared_from_this<State>
 	bool isParentOf(const State& mbChild) const;
 	bool isChildOf(const State& mbParent) const;
 	std::pair<std::list<std::shared_ptr<const State>>, std::list<std::shared_ptr<const State>>> expanded(const std::map<Symbol, RuleNode>& rootRuleNodes) const;
-	std::list<std::shared_ptr<const State>> continued(std::shared_ptr<const State> source, const std::map<Symbol, RuleNode>& rootRuleNodes) const;
+	std::list<std::shared_ptr<const State>> continued(const std::map<Symbol, RuleNode>& rootRuleNodes) const;
 	std::unique_ptr<HistoryState> getTree() const;
 };
 struct HistoryState
@@ -131,6 +131,7 @@ struct RuleNode
 	const Rule0* rule;
 	Symbol symbol;
 	std::map<Symbol, RuleNode> continuations;
+	std::string dbg_view;
 	//std::list<RuleNode> continuations;
 
 	RuleNode();
