@@ -33,13 +33,14 @@ public:
 			//new Rule2<nullptr_t, Start, Token>(nullptr, { start, end_symbol, nullptr }, start->dbg_name),
 			rules)
 	{
-		start_rule = new Rule2<nullptr_t, Start, Token>(nullptr, { start, end_symbol, nullptr }, start->dbg_name);
+		start_rule = new Rule2<nullptr_t, Start, Token>(nullptr, { start, Symbol::eof(), nullptr }, start->dbg_name);
 
 		RuleNode* rn = &rootRuleNodes[start_rule->left];
 		rn->symbol = start;
+		rn->dbg_view = start->dbg_name;
 		startRuleNode = rn;
-		rn = &rn->continuations[end_symbol];
-		rn->symbol = end_symbol;
+		rn = &rn->continuations[Symbol::eof()];
+		rn->symbol = Symbol::eof();
 		rn->rule = start_rule;
 
 		//for (const Symbol& symbol : symbols)
@@ -102,7 +103,7 @@ class AnalyzerBuilder
 		if (token_types.find(name) == token_types.end())
 		{
 			token_types.emplace(name, Token::Type(name, std::regex(regex_escape(name))));
-			terminals.insert(std::pair(name, new Terminal(token_types.at(name))));
+			terminals.insert(std::pair(name, new Terminal(&token_types.at(name))));
 			symbols.insert(std::pair(name, terminals[name]));
 			//symbols.push_back(terminals[name]);
 		}
@@ -140,9 +141,9 @@ public:
 		token_non_terminal("non_terminal", std::regex("[[:upper:]][[:alnum:]]*")),
 		token_arrow("arrow", std::regex("->")),
 		//token_spaces("token_spaces", std::regex("\\s+")),
-		terminal_terminal(new Terminal(token_terminal)),
-		terminal_non_terminal(new Terminal(token_non_terminal)),
-		terminal_arrow(new Terminal(token_arrow)),
+		terminal_terminal(new Terminal(&token_terminal)),
+		terminal_non_terminal(new Terminal(&token_non_terminal)),
+		terminal_arrow(new Terminal(&token_arrow)),
 		//terminal_spaces(new Terminal(token_spaces)),
 		non_terminal_rule(new NonTerminal("Rule"s)),
 		non_terminal_symbol(new NonTerminal("Symbol"s)),
@@ -214,7 +215,7 @@ public:
 	AnalyzerBuilder& add_token_type(std::string name, std::string regex)
 	{
 		token_types.emplace(name, Token::Type(name, std::regex(regex)));
-		terminals[name] = new Terminal(token_types.at(name));
+		terminals[name] = new Terminal(&token_types.at(name));
 		symbols.insert(std::pair(name, terminals[name]));
 		return *this;
 	}
@@ -678,7 +679,8 @@ int main()
 	std::srand(std::time(nullptr));
 	//variables["v"s] = std::rand() % 100;
 
-	//TreeNode1<nullptr_t>* program = an.analyze("{print ((1+2));}");
+	//TreeNode1<nullptr_t>* program = an.analyze("{print (2+2*2);}");
+	//TreeNode1<nullptr_t>* program = an.analyze(code);
 	//program->out(0);
 	//program->get();
 
@@ -706,6 +708,18 @@ int main()
 	abtest1.add_rule("B->b", std::function([](Token)->int { return 1; }));
 	TreeNode1<std::string>* programtest1 = abtest1.build("S"s).analyze("a a b b b a b b", true);
 	programtest1->out(0);
+	std::cout << programtest1->get() << std::endl;
+
+	std::cout << std::endl << std::endl;
+
+	AnalyzerBuilder<std::string> abtest2;
+	abtest2.add_rule("S->A", std::function([](int A)->int { return A; }));
+	abtest2.add_rule("A->B a", std::function([](int A, Token)->int { return A + 1; }));
+	abtest2.add_rule("B->A b", std::function([](int B, Token)->int { return B + 1; }));
+	abtest2.add_rule("A->", std::function([]()->int { return 0; }));
+	TreeNode1<std::string>* programtest2 = abtest2.build("S"s).analyze("b a b a b a", true);
+	programtest2->out(0);
+	std::cout << programtest2->get();
 
 	return 0;
 }

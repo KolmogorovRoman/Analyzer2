@@ -38,12 +38,12 @@ struct TreeNode0;
 template<class T> struct TreeNode1;
 template<class T, class... Childs> struct TreeNode2;
 
-
+class AnalyzerBase;
 
 struct Terminal
 {
-	Token::Type token_type;
-	Terminal(Token::Type token_type);
+	const Token::Type* token_type;
+	Terminal(const Token::Type* token_type);
 };
 struct NonTerminal
 {
@@ -67,8 +67,10 @@ struct Symbol: std::variant</*nullptr_t,*/ const Terminal*, const NonTerminal*>
 	const Terminal* asTerminal() const;
 	const NonTerminal* asNonTerminal() const;
 
-	//static Symbol eof;
-	//static Symbol empty;
+	static const Terminal* eof_v;
+	static const Terminal* empty_v;
+	static const Terminal* eof();
+	static const Terminal* empty();
 };
 
 struct State: std::enable_shared_from_this<State>
@@ -95,12 +97,13 @@ struct State: std::enable_shared_from_this<State>
 	State(const Rule0* rule, std::shared_ptr<const State> prev, const State* parent);
 	State(const RuleNode* ruleNode, const Tokenizer& tokenizer, std::shared_ptr<const State> prev, const State* parent, const State* cycle_start, const State* cycle_end);
 	//using make_result = std::variant<std::monostate, std::shared_ptr<const State>, Cycle>;
-	static /*make_result*/std::shared_ptr<const State> make(const RuleNode* ruleNode, std::shared_ptr<const State> prev, const State* parent);
+	static /*make_result*/std::shared_ptr<const State> make(const RuleNode* ruleNode, std::shared_ptr<const State> prev, const State* parent, const State* cycle_end);
 	State(const RuleNode* startRuleNode, const std::string& code);
 	bool isParentOf(const State& mbChild) const;
 	bool isChildOf(const State& mbParent) const;
-	std::pair<std::list<std::shared_ptr<const State>>, std::list<std::shared_ptr<const State>>> expanded(const std::map<Symbol, RuleNode>& rootRuleNodes) const;
-	std::list<std::shared_ptr<const State>> continued(const std::map<Symbol, RuleNode>& rootRuleNodes) const;
+	std::pair<std::list<std::shared_ptr<const State>>, std::list<std::shared_ptr<const State>>> expanded(const AnalyzerBase* analyzer) const;
+	std::list<std::shared_ptr<const State>> continued(const AnalyzerBase* analyzer) const;
+	std::list<std::shared_ptr<const State>> getHistList() const;
 	std::unique_ptr<HistoryState> getTree() const;
 };
 struct HistoryState
@@ -138,6 +141,7 @@ struct RuleNode
 	RuleNode(const Rule0* rule, Symbol symbol);
 	RuleNode(const RuleNode&) = delete;
 
+	bool isNulling() const;
 	bool isChecking() const;
 	bool isChecking(const Terminal* mbTerminal) const;
 };
@@ -236,10 +240,11 @@ struct TreeNode2<TreeNode1<T>*>:TreeNode1<TreeNode1<T>*>
 
 class AnalyzerBase
 {
+	friend class State;
 protected:
 	//std::map<std::string, Symbol> symbolbyName;
-	const Terminal* empty_symbol;
-	const Terminal* end_symbol;
+	//const Terminal* empty_symbol;
+	//const Terminal* end_symbol;
 	const Rule0* start_rule;
 	std::map<Symbol, RuleNode> rootRuleNodes;
 	//RuleNode rootRuleNode;

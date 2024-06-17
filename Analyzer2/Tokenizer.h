@@ -25,7 +25,7 @@ public:
 	Tokenizer(const std::string& code);
 	Tokenizer(const std::string& code, std::string::const_iterator head);
 	Tokenizer& operator=(const Tokenizer& other);
-	bool checkToken(Token::Type type) const;
-	std::optional<Token> getToken(Token::Type type) const;
-	Tokenizer advanced(Token::Type type) const;
+	bool checkToken(const Token::Type* type) const;
+	std::optional<Token> getToken(const Token::Type* type) const;
+	Tokenizer advanced(const Token::Type* type) const;
 };

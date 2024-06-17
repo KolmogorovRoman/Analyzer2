@@ -28,26 +28,26 @@ Tokenizer& Tokenizer::operator=(const Tokenizer& other)
 	return *this;
 }
 //int checkTokenCalls = 0;
-bool Tokenizer::checkToken(Token::Type type) const
+bool Tokenizer::checkToken(const Token::Type* type) const
 {
 	//checkTokenCalls++;
 	std::match_results<std::string::const_iterator> m;
-	std::regex_search(head, code->cend(), m, type.regex, std::regex_constants::match_continuous);
+	std::regex_search(head, code->cend(), m, type->regex, std::regex_constants::match_continuous);
 	return !m.empty();
 }
-std::optional<Token> Tokenizer::getToken(Token::Type type) const
+std::optional<Token> Tokenizer::getToken(const Token::Type* type) const
 {
 	std::match_results<std::string::const_iterator> m;
-	std::regex_search(head, code->cend(), m, type.regex, std::regex_constants::match_continuous);
+	std::regex_search(head, code->cend(), m, type->regex, std::regex_constants::match_continuous);
 	if (m.empty()) return std::optional<Token>();
-	else return Token(type, m.str());
+	else return Token(*type, m.str());
 }
 //int advancedCalls = 0;
-Tokenizer Tokenizer::advanced(Token::Type type) const
+Tokenizer Tokenizer::advanced(const Token::Type* type) const
 {
 	//advancedCalls++;
 	std::match_results<std::string::const_iterator> m;
-	std::regex_search(head, code->cend(), m, type.regex, std::regex_constants::match_continuous);
+	std::regex_search(head, code->cend(), m, type->regex, std::regex_constants::match_continuous);
 	std::match_results<std::string::const_iterator> m1;
 	std::regex_search(head + m.length(), code->cend(), m1, std::regex("\\s*"), std::regex_constants::match_continuous);
 	return Tokenizer(*code, head + m.length() + m1.length());
